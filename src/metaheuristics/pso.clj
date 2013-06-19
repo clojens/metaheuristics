@@ -11,79 +11,103 @@
 (defstruct particle :position :velocity :pbestpos :pbestfit)
 (defstruct swarm :particlelist :gbest :vmax :hfit)
 
-(defn- init-particle [nDimensions max]
+(defn- init-particle
+  "TODO DocString"
+  [nDimensions max]
   (agent (struct particle
 		 (double-array (for [i (range nDimensions)] (rand max)))
 		 (double-array (for [i (range nDimensions)] (rand max)))
 		 (double-array (replicate nDimensions 1.0))
 		 Double/MAX_VALUE)))
 
-(defn- init-swarm [nParticles nDimensions vmaxDelta nHistoryFitness max]
-  (let [particles (map (fn [_] (init-particle nDimensions max)) (range nParticles))
-	best (init-particle nDimensions max)
-	vmax (agent (double-array (repeat nDimensions (* vmaxDelta max))))
-	hfit (agent (double-array (replicate nHistoryFitness Double/MAX_VALUE)))]
+(defn- init-swarm
+  "TODO DocString"
+  [nParticles nDimensions vmaxDelta nHistoryFitness max]
+  (let [particles
+        (map (fn [_] (init-particle nDimensions max)) (range nParticles))
+        best (init-particle nDimensions max)
+        vmax (agent (double-array (repeat nDimensions (* vmaxDelta max))))
+        hfit (agent (double-array (replicate nHistoryFitness Double/MAX_VALUE)))]
     (struct swarm particles best vmax hfit)))
 
-(defn- inertia-weight 
-  []  	 
-  (double (+ 0.5 (/ (rand) 2.0))))
+(defn- inertia-weight
+  "TODO DocString"
+  [] (double (+ 0.5 (/ (rand) 2.0))))
 
 (defn- update-particle
+  "TODO DocString"
   [particle fitness ftype gbest vmaxVec iteration]
   (let [#^doubles pos (:position particle)
-	#^doubles vel (:velocity particle)
-	#^doubles pbestpos (:pbestpos particle)
-	pbestfit (double (:pbestfit particle))
-	#^doubles gbestpos (:pbestpos @gbest)
-	gbestfit (double (:pbestfit @gbest))
+        #^doubles vel (:velocity particle)
+        #^doubles pbestpos (:pbestpos particle)
+        pbestfit (double (:pbestfit particle))
+        #^doubles gbestpos (:pbestpos @gbest)
+        gbestfit (double (:pbestfit @gbest))
 
-	; acceleration constants
-	c1 1.494
-	c2 1.494
-	; random elements
-	phi1 (double (rand))
-	phi2 (double (rand))
-	; inertia weight
-	w (inertia-weight)
+        ;; acceleration constants
+        c1 1.494
+        c2 1.494
 
-        ; update velocity
-	newvel (amap vel idx ret
-		     (+ (* c1 phi1 (- (aget gbestpos idx) (aget pos idx)))
-			(* c2 phi2 (- (aget pbestpos idx) (aget pos idx)))
-			(* (aget vel idx))))
-	;velocity clamping
-	vmax @vmaxVec
-	clampvel (amap newvel i ret
-			 (if (< (abs (aget newvel i)) (aget vmax i))
+        ;; random elements
+        phi1 (double (rand))
+        phi2 (double (rand))
+
+        ;; inertia weight
+        w (inertia-weight)
+
+        ;; update velocity
+        newvel (amap vel idx ret
+                     (+ (* c1 phi1 (- (aget gbestpos idx)
+                                      (aget pos idx)))
+                        (* c2 phi2 (- (aget pbestpos idx)
+                                      (aget pos idx)))
+                        (* (aget vel idx))))
+
+        ;; velocity clamping
+        vmax @vmaxVec
+        clampvel (amap newvel i ret
+                       (if (< (abs (aget newvel i))
+                              (aget vmax i))
 			   (aget newvel i)
-			   (* (/ (aget vmax i) (abs (aget newvel i))) (aget newvel i))))
+			   (* (/ (aget vmax i)
+               (abs (aget newvel i)))
+            (aget newvel i))))
 
-        ; update position
-	newpos (amap pos idx ret
-		     (+ (aget pos idx) (aget clampvel idx)))
-	; update pbest
-	fit (fitness newpos)
-	newpbestfit (if (ftype fit pbestfit) fit pbestfit)
-	newpbestpos (if (ftype fit pbestfit) newpos pbestpos)]
-	; finally assign updates to agent
-    (assoc particle :position newpos :velocity newvel 
-	   :pbestpos newpbestpos :pbestfit newpbestfit)))
+        ;; update position
+        newpos (amap pos idx ret
+                     (+ (aget pos idx)
+                        (aget clampvel idx)))
 
-(defn- update-gbest [gbest ftype particles]
+        ;; update pbest
+        fit (fitness newpos)
+        newpbestfit (if (ftype fit pbestfit) fit pbestfit)
+        newpbestpos (if (ftype fit pbestfit) newpos pbestpos)]
+
+    ;; Body!
+    ;; finally assign updates to agent
+    (assoc particle :position newpos :velocity newvel
+      :pbestpos newpbestpos :pbestfit newpbestfit)))
+
+(defn- update-gbest
+  "TODO DocString"
+  [gbest ftype particles]
   (let [newbest (first (sort-by :pbestfit ftype (map #(deref %) particles)))
 	#^doubles newpbestpos (:pbestpos newbest)
 	newpbestfit (double (:pbestfit newbest))]
     (assoc gbest :pbestpos newpbestpos :pbestfit newpbestfit)))
 
-(defn- update-hfit [hfit gbest]
+(defn- update-hfit
+  "TODO DocString"
+  [hfit gbest]
   (let [gbestfit (double (:pbestfit @gbest))]
     (amap hfit i ret
 	  (if (= i 0)
 	    gbestfit
 	    (aget hfit (- i 1))))))
 
-(defn- update-vmax [vmax swarm iteration]
+(defn- update-vmax
+  "TODO DocString"
+  [vmax swarm iteration]
   (let [#^doubles nlastfit @(:hfit swarm)
 	gbestfit (double (:pbestfit @(:gbest swarm)))
 	prebeta (- 1.0 (* iteration 0.0001))
@@ -96,7 +120,9 @@
 (defn- reset-vmax [vmax vmaxDelta max-feat]
   (double-array (repeat (count vmax) (* vmaxDelta max-feat))))
 
-(defn- reset-particle [particle]
+(defn- reset-particle
+  "TODO DocString"
+  [particle]
   (let [nDimensions (count (:position particle))
 	newpos (double-array (for [i (range nDimensions)] (rand 255)))
 	;;newvel (double-array (repeat nDimensions 0.0))
@@ -104,8 +130,10 @@
 	#^doubles newpbest (:pbestpos particle)]
     (assoc particle :position newpos :velocity newvel :pbestpos newpbest)))
 
-(defn- fly [fitness ftype swarm iteration max-feat]
-  ;;reset x random particles every 4 iteration  
+(defn- fly
+  "TODO DocString"
+  [fitness ftype swarm iteration max-feat]
+  ;;reset x random particles every 4 iteration
   ;; (if (= (rem iteration 25) 0)
   ;;   (do
   ;;     (send (:vmax swarm) reset-vmax 1.0 max-feat)
@@ -115,8 +143,9 @@
   ;; 	(dorun (map #(send %1 reset-particle) plist))
   ;; 	(apply await plist))))
 
-  ; update particles
-  (dorun (map #(send % update-particle fitness ftype (:gbest swarm) (:vmax swarm) iteration)
+  ;; update particles
+  (dorun (map #(send % update-particle fitness ftype
+                     (:gbest swarm) (:vmax swarm) iteration)
 	      (:particlelist swarm)))
   (apply await (:particlelist swarm))
 
@@ -136,22 +165,26 @@
   )
 
 (defn pso
-  "Starts the PSO algorithm.
-  Parameter: 
-  fitness - defines the fitness function used in the PSO. The only argument is the position of the particle (a double-vector)
-  ftype - defines the type of optimization problem (minimize (<) or maximize (>)).
-  dim - number of dimensions in solution.
-  nparticles - number of particles in swarm.
-  vc-init - initial value for velocity clamping (usually 1.0)
-  vc-hist - number of history value for velocity clamping (usually 0.8 * max-iterations).
+  "Starts the PSO algorithm
+
+  Parameter:
+  ---------
+  fitness        - defines the fitness function used in the PSO.
+                   only argument is position of the particle (double-vector)
+  ftype          - defines the type of optimization problem
+                   (minimize (<) or maximize (>)).
+  dim            - number of dimensions in solution.
+  nparticles     -  number of particles in swarm.
+  vc-init        - initial value for velocity clamping (usually 1.0)
+  vc-hist        - number of history value for velocity clamping
+                   (usually 0.8 * max-iterations).
   max-iterations - maximum number of iterations.
-  max-feat - maximum value for one feature.
-  "
+  max-feat       - maximum value for one feature."
+
   [fitness ftype dim nparticles vc-init vc-hist max-iterations max-feat]
   (let [swarm (init-swarm nparticles dim vc-init vc-hist max-feat)]
-    (dorun (map (fn [i] (fly fitness ftype swarm i max-feat)) (range max-iterations)))
+    (dorun (map #(fly fitness ftype swarm % max-feat)
+                (range max-iterations)))
     @(:gbest swarm)))
 
-
 ;; (pso griewank < 10 30 10 1.0 (* 500 0.8) 10.0)
-

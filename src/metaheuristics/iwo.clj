@@ -3,91 +3,156 @@
   (:use [clojure.contrib.math])
   (:use metaheuristics.testfunctions))
 
-;; rand from normal distribution
-(defn- normal [mu sigma]
+(defn- normal
+  "Random from normal distribution."
+  [mu sigma]
   (let [r (new java.util.Random)]
     (+ mu (* sigma (.nextGaussian r)))))
 
-; invasive weed optimization
-; --------------------------
 
-(defstruct plant :seedlist :position :pfit :tfit)
-(defstruct population :plantlist :gbest :gworst :minseed :maxseed :sigmaInit :sigmaFinal)
+;; Invasive weed optimization
+;; ==========================
 
-(defn- init-plant [nDimensions max]
+;;
+;; Structural
+;;
+
+;; FIXME Refactor into defrecord(2)
+
+(defstruct plant
+  :seedlist :position :pfit :tfit)
+
+(defstruct population
+  :plantlist :gbest   :gworst :minseed   :maxseed :sigmaInit :sigmaFinal)
+
+
+;;
+;; Initialization
+;;
+
+(defn- init-plant
+  "Initialize fauna."
+  [nDimensions max]
   (agent (struct plant
 		 (list)
 		 (double-array (for [i (range nDimensions)] (rand max)))
 		 (double 0.0)
 		 (double 0.0))))
 
-(defn- init-population [nPlants nDimensions nSeedMin nSeedMax sigmaInit sigmaFinal max]
+(defn- init-population
+  "Initialize population using seeds."
+  [nPlants nDimensions nSeedMin nSeedMax sigmaInit sigmaFinal max]
   (let [plants (map (fn [_] (init-plant nDimensions max)) (range nPlants))
-	gbest (init-plant nDimensions max)
-	gworst (init-plant nDimensions max)]
-    (agent (struct population plants gbest gworst (int nSeedMin) (int nSeedMax) sigmaInit sigmaFinal))))
+        gbest  (init-plant nDimensions max)
+        gworst (init-plant nDimensions max)]
+    (agent (struct population plants gbest gworst
+                   (int nSeedMin)
+                   (int nSeedMax)
+                   sigmaInit
+                   sigmaFinal))))
 
-(defn- set-bestworst [population ftype]
+;;
+;; Scenarios
+;;
+
+(defn- set-bestworst
+  "Set a best-worst case scenario."
+  [population ftype]
   (let [plants (for [p (:plantlist population)] @p)
-	sorted (sort-by :pfit ftype plants)]
-    (assoc population :gbest (agent (first sorted)) :gworst (agent (last sorted)))))
+        sorted (sort-by :pfit ftype plants)]
+    (assoc population
+      :gbest (agent (first sorted))
+      :gworst (agent (last sorted)))))
 
-;; eval seeds
-(defn- eval-seed [seed fitness]
+
+;;
+;; Evaluation
+;;
+
+(defn- eval-seed
+  "TODO DocString"
+  [seed fitness]
   (let [#^doubles pos (:position seed)
-	fit (fitness pos)]
+        fit (fitness pos)]
     (assoc seed :pfit fit)))
 
-(defn- eval-plantseeds [plant fitness]
+(defn- eval-plantseeds
+  "TODO DocString"
+  [plant fitness]
   (let [seeds (:seedlist @plant)]
     (doseq [s seeds] (send s eval-seed fitness))
     (apply await seeds)))
 
-;; create new seeds
-(defn- create-new-seed [pos sigma]
+;;
+;; Creation and (re)generation
+;;
+
+(defn- create-new-seed
+  "Todo ds"
+  [pos sigma]
   (let [dim (count pos)
-	pos-offset (double-array (map (fn [_] (normal 0 sigma)) (range dim)))
-	newpos (amap pos i ret
-		     (+ (aget pos i) (aget pos-offset i)))]
+        pos-offset (double-array
+                    (map (fn [_] (normal 0 sigma)) (range dim)))
+        newpos (amap pos i ret
+                     (+ (aget pos i) (aget pos-offset i)))]
     (agent (struct plant (list) newpos 0.0))))
 
-(defn- generate-seeds [plant population maxIt modulation iteration]
+(defn- generate-seeds
   "Generates new seeds"
-  (let [pfit (double (:pfit plant))
-	#^doubles pos (:position plant)
-	gbestfit (double (:pfit @(:gbest population)))
-	gworstfit (double (:pfit @(:gworst population)))
-	minSeed (int (:minseed population))
-	maxSeed (int (:maxseed population))
-	sigmaInit (double (:sigmaInit population))
-	sigmaFinal (double (:sigmaFinal population))
-
-	nSeeds (int (+ (* (/ (- pfit gworstfit) (- gbestfit gworstfit)) maxSeed)
-		       (* (/ (- pfit gbestfit) (- gworstfit gbestfit)) minSeed)))	
-	sigma (+ (* (/ (Math/pow (- maxIt iteration) modulation)
-		       (Math/pow maxIt modulation))
-		    (- sigmaInit sigmaFinal))
-		 sigmaFinal)
-	newSeeds (map (fn [_] (create-new-seed pos sigma)) (range nSeeds))]
+  [plant population maxIt modulation iteration]
+  (let [pfit          (double (:pfit plant))
+        #^doubles pos (:position plant)
+        gbestfit      (double (:pfit @(:gbest population)))
+        gworstfit     (double (:pfit @(:gworst population)))
+        minSeed       (int (:minseed population))
+        maxSeed       (int (:maxseed population))
+        sigmaInit     (double (:sigmaInit population))
+        sigmaFinal    (double (:sigmaFinal population))
+        nSeeds (int (+
+                     (* (/ (- pfit gworstfit) (- gbestfit gworstfit)) maxSeed)
+                     (* (/ (- pfit gbestfit) (- gworstfit gbestfit)) minSeed)))
+        sigma (+
+               (* (/ (Math/pow (- maxIt iteration) modulation)
+                     (Math/pow maxIt modulation))
+                  (- sigmaInit sigmaFinal))
+               sigmaFinal)
+        newSeeds (map (fn [_] (create-new-seed pos sigma)) (range nSeeds))]
     (assoc plant :seedlist newSeeds)))
 
-(defn- competition [population ftype limit style]
-  (let [seeds (for [p (:plantlist population) s (:seedlist @p)] @s)
-	plants (for [p (:plantlist population)] @p)       
-	;; best up to limit
-	newpop (take limit (sort-by :pfit ftype (concat seeds plants)))
-	newagents (for [np newpop] (agent np))]
+(defn- competition
+  "Plant life competes over valuable real-estate. This would be for example
+  for both ground (best minerals, soil) as for sunlight (grow higher, expand
+  on top level to gain more light = photosynthesis) and underground roots for
+  water."
+  [population ftype limit style]
+  (let [seeds     (for [p (:plantlist population) s (:seedlist @p)] @s)
+        plants    (for [p (:plantlist population)] @p)
+        ;; best up to limit
+        newpop    (take limit (sort-by :pfit ftype (concat seeds plants)))
+        newagents (for [np newpop] (agent np))]
     (assoc population
-      :plantlist newagents :gbest (agent (first newpop)) :gworst (agent (last newpop)))))
+      :plantlist newagents
+      :gbest (agent (first newpop))
+      :gworst (agent (last newpop)))))
 
-(defn- grow [fitness ftype population maxIt nPlantsMax modulation iteration]
+
+;; FIXME Replace debug with macro'd dbg and monadic spears/arrows/diamonds.
+
+(defn- grow
+  "Grow plant life."
+  [fitness ftype population maxIt nPlantsMax modulation iteration]
   ;; generate new seeds for each plant-agent
   (if DEBUG? (println "creating new seeds..."))
-  (dorun (map #(send % generate-seeds @population maxIt modulation iteration) 
-	      (:plantlist @population)))
+  (dorun (map #(send % generate-seeds @population maxIt modulation iteration)
+              (:plantlist @population)))
   (apply await (:plantlist @population))
-  (if DEBUG? (println "no. of seeds:" (count (for [p (:plantlist @population) seeds (:seedlist @p)]
-				    seeds))))
+
+  (if DEBUG?
+    (println "no. of seeds:"
+             (count
+              (for [p (:plantlist @population)
+                    seeds (:seedlist @p)]
+                seeds))))
 
   ;; update seed fitness
   (if DEBUG? (println "updating seed fitness..."))
@@ -97,37 +162,45 @@
   (if DEBUG? (println "competition..."))
   (send population competition ftype nPlantsMax 1)
   (await population)
-  (if DEBUG? (println "best in generation" iteration":" (:pfit @(:gbest @population)) "\n---"))
-  )
+  (if DEBUG? (println "best in generation" iteration":"
+                      (:pfit @(:gbest @population)) "\n---")))
 
 (defn iwo
-  "Starts the IWO algorithm. Algorithm based on http://dx.doi.org/10.1016/j.ecoinf.2006.07.003
-   Parameters:
-   fitness - the fitness function to be used. only one parameter: the position of the particle (double-array).
-   ftype - defines the type of optimization problem (minimize (<) or maximize (>)).
-   dim - number of dimensions in solution.
-   nplants - number of initial plants.
-   nplants-max - maximum number of plants in population.
-   seed-min - minimum number of seeds generated per plant.
-   seed-max - maximum number of seeds generated per plant.
-   sigma-init - inital value for sigma (standard deviation).
-   sigma-final - final value for sigma (standard deviation).
-   modulation -  modulation index (usually 3). 
-   max-iterations - maximum number of iterations.
-   max-feat - maximum value for one feature.
-   " 
+  "Starts the IWO algorithm.
+  Algorithm based on http://dx.doi.org/10.1016/j.ecoinf.2006.07.003
+
+  Parameters:
+  ----------
+  fitness        - the fitness function to be used. only one parameter:
+                   the position of the particle (double-array).
+  ftype          - defines the type of optimization problem
+                   (minimize (<) or maximize (>)).
+  dim            - number of dimensions in solution.
+  nplants        - number of initial plants.
+  nplants-max    - maximum number of plants in population.
+  seed-min       - minimum number of seeds generated per plant.
+  seed-max       - maximum number of seeds generated per plant.
+  sigma-init     - inital value for sigma (standard deviation).
+  sigma-final    - final value for sigma (standard deviation).
+  modulation     -  modulation index (usually 3).
+  max-iterations - maximum number of iterations.
+  max-feat       - maximum value for one feature."
   [fitness ftype dim nplants nplants-max seed-min seed-max
    sigma-init sigma-final modulation max-iterations max-feat]
-  (let [population (init-population nplants dim seed-min seed-max sigma-init sigma-final max-feat)]
-0    ; one time eval of initial plants
+  (let [population (init-population nplants dim seed-min seed-max
+                                    sigma-init sigma-final max-feat)]
+    ;; one time eval of initial plants
     (dorun (map #(send % eval-seed fitness) (:plantlist @population)))
     (apply await (:plantlist @population))
     (send population set-bestworst ftype)
     (await population)
     ; start IWO
-    (dorun (map (fn [i] (grow fitness ftype population max-iterations nplants-max modulation i))
+    (dorun
+     (map
+      #(grow fitness ftype population max-iterations nplants-max modulation %)
 		(range max-iterations)))
-    ; return best solution
+
+    ;; return best solution
     @(:gbest @population)))
 
 (def DEBUG? false)

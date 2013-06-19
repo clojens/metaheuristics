@@ -6,18 +6,24 @@
 ; helper functions
 ; ----------------
 (defn- scramble
+  "TODO DocString"
   [l]
   (let [items (java.util.ArrayList. l)]
-	scramble (do (java.util.Collections/shuffle items) (seq items))))
+    scramble (do (java.util.Collections/shuffle items) (seq items))))
 
-(defn- normal [mu sigma]
+(defn- normal
+  "TODO DocString"
+  [mu sigma]
   (let [r (new java.util.Random)]
     (+ mu (* sigma (.nextGaussian r)))))
 
-(defn- garand-int [max number]
+(defn- garand-int
+  "TODO DocString"
+  [max number]
   (map (fn [_] (int (* max (rand)))) (range number)))
 
 (defn- euclidean
+  "TODO DocString"
   [v1 v2]
   (Math/sqrt (areduce v1 i ret 0
 	   (+ ret (Math/pow (- (aget v1 i) (aget v2 i)) 2)))))
@@ -28,61 +34,69 @@
 (defstruct population :poplist)
 
 (defn- generate-chromosome
+  "TODO DocString"
   [n bits]
   (let [max (int (- (Math/pow 2 bits) 1))]
     (garand-int max n)))
 ;(generate-chromosome 22 8)
 
 (defn- init-individual
+  "TODO DocString"
   [n bits]
   (struct individual 0 (generate-chromosome n bits)
 	  (map #(* 10 %) (take 22 (repeatedly rand))) 0))
 
 (defn- init-population
+  "TODO DocString"
   [n dim bits]
   (let [poplist (map (fn [_] (init-individual dim bits)) (range n))]
     (struct population poplist)))
 
 (defn chromo-to-phenotype
+  "TODO DocString"
   [chromosome]
   (let [sum (reduce + chromosome)]
     (double-array (for [gene chromosome] (/ gene sum)))))
 
 (defn- share
+  "TODO DocString"
   [dist sigma alpha]
   (if (<= dist sigma)
     (- 1 (Math/pow (/ dist sigma) alpha))
     0))
 
-(defn- fitness-sharing 
+(defn- fitness-sharing
+  "TODO DocString"
   [ind popu]
   (let [sigma 100 ;; 100 seems to be fine
 	alpha 1
 	dist-sum (reduce + (for [other (:poplist popu)]
 		   (share (euclidean
-			   (double-array (:chromosome ind)) 
+			   (double-array (:chromosome ind))
 			   (double-array (:chromosome other)))
-			  sigma 
+			  sigma
 			  alpha)))]
     (assoc ind :fitness (/ (:fitness ind) dist-sum))))
 ;; (def foo (init-population 10 22 8))
 ;; (fitness-sharing (init-individual 22 8) foo)
 
 (defn- evaluate-individual
+  "TODO DocString"
   [ind fitness]
-  (let [w-pheno (chromo-to-phenotype (:chromosome ind))	
+  (let [w-pheno (chromo-to-phenotype (:chromosome ind))
 	fitval (fitness w-pheno)]
     (assoc ind :fitness fitval)))
 
 (defn- evaluate-all
+  "TODO DocString"
   [popu fitness fs?]
-  (let [agentlist (for [ind (:poplist popu) :when (= (:tag ind) 1)] (agent ind))]
-
+  (let [agentlist (for [ind (:poplist popu) :when (= (:tag ind) 1)]
+                    (agent ind))]
     (dorun (map #(send %1 evaluate-individual fitness) agentlist))
     (apply await agentlist)
 
     ;; fitness sharing
-    (if fs? (do 
+    (if fs? (do
 	      (dorun (map #(send %1 fitness-sharing popu) agentlist))
 	      (apply await agentlist)))
 
@@ -91,6 +105,7 @@
       (assoc popu :poplist (concat parents children)))))
 
 (defn- evaluate-all-firstrun
+  "TODO DocString"
   [popu fitness]
   (let [agentlist (for [ind (:poplist popu)] (agent ind))]
     (dorun (map #(send %1 evaluate-individual fitness) agentlist))
@@ -98,26 +113,31 @@
     (assoc popu :poplist (for [agent agentlist] @agent))))
 
 (defn- gene-crossover
+  "TODO DocString"
   [gene1 gene2 len]
   (let [mask (int (- (Math/pow 2 len) 1))
-	last-g1 (bit-and gene1 mask)
-	last-g2 (bit-and gene2 mask)
-	new-g1 (bit-or (bit-shift-left (bit-shift-right gene1 len) len) last-g2)
-	new-g2 (bit-or (bit-shift-left (bit-shift-right gene2 len) len) last-g1)]
+        last-g1 (bit-and gene1 mask)
+        last-g2 (bit-and gene2 mask)
+        new-g1 (bit-or
+                (bit-shift-left (bit-shift-right gene1 len) len) last-g2)
+        new-g2 (bit-or
+                (bit-shift-left (bit-shift-right gene2 len) len) last-g1)]
     (list new-g1 new-g2)))
 ;(gene-crossover 8 3 6)
 
 (defn- crossover
+  "TODO DocString"
   [chromo1 chromo2 bits]
   (let [split-pos (nth (range 1 bits) (rand-int (- bits 1)))
-	split-length (- bits split-pos)
-	result (map #(gene-crossover %1 %2 split-length) chromo1 chromo2)
-	c1-new (map #(first %1) result)
-	c2-new (map #(second %1) result)]
+        split-length (- bits split-pos)
+        result (map #(gene-crossover %1 %2 split-length) chromo1 chromo2)
+        c1-new (map #(first %1) result)
+        c2-new (map #(second %1) result)]
     (list c1-new c2-new)))
 ;(crossover '(255 12 18 238 210 199 88) '(4 8 15 16 23 42 108) 8)
 
 (defn- mutation
+  "TODO DocString"
   [chromosome bits percentage]
   (for [gene chromosome]
     (loop [g gene b 0]
@@ -128,17 +148,21 @@
 ;;(mutation '(34 21 57 56 11 10) 8)
 
 (defn- do-offspring
+  "TODO DocString"
   [acc parents-pair]
   (let [percentage 0.3
-	p1c (:chromosome (first parents-pair))
-	p2c (:chromosome (second parents-pair))
-	children (crossover p1c p2c 8)
-	child1 {:tag 1 :chromosome (mutation (first children) 8 percentage) :steps (list) :fitness 0}
-	child2 {:tag 1 :chromosome (mutation (second children) 8 percentage) :steps (list)  :fitness 0}
-	old-pop-list (:poplist acc)]
+        p1c (:chromosome (first parents-pair))
+        p2c (:chromosome (second parents-pair))
+        children (crossover p1c p2c 8)
+        child1 {:tag 1 :chromosome
+                (mutation (first children) 8 percentage) :steps (list) :fitness 0}
+        child2 {:tag 1 :chromosome
+                (mutation (second children) 8 percentage) :steps (list)  :fitness 0}
+        old-pop-list (:poplist acc)]
     (assoc acc :poplist (conj old-pop-list child1 child2))))
 
 (defn- adapted-crossover
+  "TODO DocString"
   [p1 p2]
   (let [dim (count (:chromosome p1))
 	dim2 (/ dim 2)
@@ -151,6 +175,7 @@
     (list childc childs)))
 
 (defn- adapted-mutation
+  "TODO DocString"
   [chromosome steps]
   (let [dim 22
 	bound 0.5
@@ -180,6 +205,7 @@
     (reduce do-offspring acc parents)))
 
 (defn- survivor-selection
+  "TODO DocString"
   [popu ftype percent popsize]
   (let [sorted-all (sort-by :fitness ftype (:poplist popu))
 	size-all (count sorted-all)
@@ -192,6 +218,7 @@
     (assoc popu :poplist (concat top-percent-members rest-offspring))))
 
 (defn- parent-selection
+  "TODO DocString"
   [popu ftype percent popsize adapted?]
   (let [sorted (sort-by :fitness ftype (:poplist popu))
 	size-parents (int (* percent popsize))
@@ -200,29 +227,31 @@
 	ext-parents (if adapted?
 		     (scramble (take (* 2 popsize) (cycle parents)))
 		     (scramble (take popsize (cycle parents))))
-	splitted (if adapted? 
+	splitted (if adapted?
 		   (split-at popsize ext-parents)
 		   (split-at (/ popsize 2) ext-parents))]
     (map #(list %1 %2) (nth splitted 0) (nth splitted 1))))
 
 (defn ga
   "Starts the GA algorithm.
-  Parameter: 
-  fitness - defines the fitness function used. The only argument is the position of the particle (a double-vector).
-  ftype - defines the type of optimization problem (minimize (<) or maximize (>)).
-  dim - number of dimensions in solution.
-  popsize - size of the population.
-  par-perc - percentage of parents chosen for parent selection.
-  surv-perc - percentage of population chosen for next genertion.
-  adpated? - use mutation step size adaption (boolean).
+  Parameter:
+  fitness        - defines the fitness function used.
+  The only argument is the position of the particle (a double-vector).
+  ftype          - defines the type of optimization problem
+                   (minimize (<) or maximize (>)).
+  dim            - number of dimensions in solution.
+  popsize        - size of the population.
+  par-perc       - percentage of parents chosen for parent selection.
+  surv-perc      - percentage of population chosen for next genertion.
+  adpated?       - use mutation step size adaption (boolean).
   max-iterations - maximum number of iterations.
-  "  
+  "
   [fitness ftype dim popsize par-perc surv-perc adapted? max-iterations]
   (let [popu (init-population popsize 22 8)
 	popu-evaluated (evaluate-all-firstrun popu fitness)]
 
     (loop [runs max-iterations popu popu-evaluated]
-      (if DEBUG? (println "best:" (:fitness (first (sort-by :fitness ftype 
+      (if DEBUG? (println "best:" (:fitness (first (sort-by :fitness ftype
 							    (:poplist popu))))))
       (if (zero? runs)
 	(first (sort-by :fitness ftype (:poplist popu)))
