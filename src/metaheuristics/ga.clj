@@ -1,62 +1,100 @@
 (ns metaheuristics.ga
-  "A genetic algorithm (GA) is a search heuristic that mimics the process of
-  natural evolution. This heuristic (also sometimes called a metaheuristic)
-  is routinely used to generate useful solutions to optimization and search
-  problems."
+  "In a genetic algorithm, a population of candidate solutions to an
+  optimization problem is evolved toward better solutions.
+
+  A typical genetic algorithm requires: a genetic representation of the
+  solution domain, a fitness function to evaluate the solution domain.
+
+  Once the genetic representation and the fitness function are defined, a GA
+  proceeds to initialize a population of solutions and then to improve it
+  through repetitive application of the mutation, crossover, inversion and
+  selection operators.
+
+  Individual solutions are selected through a fitness-based process, where
+  fitter solutions are typically more likely to be selected.
+
+  Fitness (often denoted in population genetics models) is a central
+  idea in evolutionary theory. "
+
   (:use [clojure.set :only (intersection difference)])
   (:use [clojure.contrib.math])
   (:use metaheuristics.testfunctions))
 
-; helper functions
-; ----------------
+;;
+;; Helper functions
+;;
+
 (defn- scramble
-  "TODO DocString"
+  "The Fisher–Yates shuffle (named after Ronald Fisher and Frank Yates),
+  also known as the Knuth shuffle (after Donald Knuth), is an algorithm
+  for generating a random permutation of a finite set—in plain terms,
+  for randomly shuffling the set."
   [l]
   (let [items (java.util.ArrayList. l)]
-    scramble (do (java.util.Collections/shuffle items) (seq items))))
+    scramble (do
+               (java.util.Collections/shuffle items)
+               (seq items))))
 
 (defn- normal
-  "TODO DocString"
+  "Gaussian functions are widely used in statistics where they describe the
+  normal distributions and in signal processing where they serve to define
+  Gaussian filters."
   [mu sigma]
   (let [r (new java.util.Random)]
     (+ mu (* sigma (.nextGaussian r)))))
 
 (defn- garand-int
-  "TODO DocString"
-  [max number]
-  (map (fn [_] (int (* max (rand)))) (range number)))
+  "Generates a list of n random integers with a max possible value roof."
+  [max n]
+  (map (fn [_] (int (* max (rand)))) (range n)))
 
 (defn- euclidean
-  "TODO DocString"
+  "Method alength works on Java arrays such as a String[] or Integer[].
+  Expects these as input arguments for the function to calculate greatest
+  common divisor (gcd)."
   [v1 v2]
   (Math/sqrt (areduce v1 i ret 0
-	   (+ ret (Math/pow (- (aget v1 i) (aget v2 i)) 2)))))
+	   (+ ret (Math/pow (- (aget v1 i)
+                         (aget v2 i))
+                      2)))))
+
 
 ;;
 ;; Structural
 ;;
-(defstruct individual :tag :chromosome :steps :fitness)
-(defstruct population :poplist)
+
+(defstruct individual
+  "Natural selection within an individual requires minimal the
+  properties as outlined here."
+  :tag :chromosome :steps :fitness)
+
+(defstruct population
+  "A population is made up of individuals."
+  :poplist)
 
 ;;
 ;; Generation / initialization
 ;;
 
 (defn- generate-chromosome
-  "TODO DocString"
+  "Generate a chromosome strand of n bits long."
   [n bits]
   (let [max (int (- (Math/pow 2 bits) 1))]
     (garand-int max n)))
-;(generate-chromosome 22 8)
+
+;(doall (generate-chromosome 22 8))
 
 (defn- init-individual
-  "TODO DocString"
+  "Intializes an individiual by giving it identity (hash-map with tag)
+  who is made up of 22 random chromosomes. (??)"
   [n bits]
   (struct individual 0 (generate-chromosome n bits)
 	  (map #(* 10 %) (take 22 (repeatedly rand))) 0))
 
+;(init-individual 22 8)
+
 (defn- init-population
-  "TODO DocString"
+  "Initialize a population by populating a list of individuals."
   [n dim bits]
   (let [poplist (map (fn [_] (init-individual dim bits)) (range n))]
     (struct population poplist)))
@@ -66,7 +104,8 @@
 ;;
 
 (defn chromo-to-phenotype
-  "TODO DocString"
+  "Phenotypes result from the expression of an organism's genes as well as the
+  influence of environmental factors and the interactions between the two."
   [chromosome]
   (let [sum (reduce + chromosome)]
     (double-array (for [gene chromosome] (/ gene sum)))))
@@ -83,36 +122,45 @@
     (- 1 (Math/pow (/ dist sigma) alpha))
     0))
 
+
 (defn- fitness-sharing
-  "TODO DocString"
+  "http://en.wikipedia.org/wiki/Fitness_(biology)
+  There are two commonly used measures of fitness; absolute fitness and
+  relative fitness."
   [ind popu]
   (let [sigma 100 ;; 100 seems to be fine
-	alpha 1
-	dist-sum (reduce + (for [other (:poplist popu)]
-		   (share (euclidean
-			   (double-array (:chromosome ind))
-			   (double-array (:chromosome other)))
-			  sigma
-			  alpha)))]
+        alpha 1
+        dist-sum (reduce
+                  +
+                  (for [other (:poplist popu)]
+                    (share (euclidean
+                            (double-array (:chromosome ind))
+                            (double-array (:chromosome other)))
+                           sigma alpha)))]
     (assoc ind :fitness (/ (:fitness ind) dist-sum))))
+
 ;; (def foo (init-population 10 22 8))
 ;; (fitness-sharing (init-individual 22 8) foo)
+
 
 ;;
 ;; Evaluate process
 ;;
 
 (defn- evaluate-individual
-  "TODO DocString"
+  "Evaluate an individual on basis of their fitness."
   [ind fitness]
   (let [w-pheno (chromo-to-phenotype (:chromosome ind))
-	fitval (fitness w-pheno)]
+        fitval  (fitness w-pheno)]
     (assoc ind :fitness fitval)))
 
 (defn- evaluate-all
-  "TODO DocString"
+  "Evaluates performance of the population in terms of fitness.
+  ((The average fitness of the whole population is the fitness of
+  each genotype multiplied by its frequency: this is called mean fitness.))"
   [popu fitness fs?]
-  (let [agentlist (for [ind (:poplist popu) :when (= (:tag ind) 1)]
+  (let [agentlist (for [ind (:poplist popu)
+                        :when (= (:tag ind) 1)]
                     (agent ind))]
     (dorun (map #(send %1 evaluate-individual fitness) agentlist))
     (apply await agentlist)
@@ -123,11 +171,14 @@
 	      (apply await agentlist)))
 
     (let [children (for [agent agentlist] @agent)
-	  parents (for [p (:poplist popu) :when (= (:tag p) 0)] p)]
+          parents  (for [p (:poplist popu)
+                         :when (= (:tag p) 0)] p)]
+
       (assoc popu :poplist (concat parents children)))))
 
+
 (defn- evaluate-all-firstrun
-  "TODO DocString"
+  "Evaluate all on the first run."
   [popu fitness]
   (let [agentlist (for [ind (:poplist popu)] (agent ind))]
     (dorun (map #(send %1 evaluate-individual fitness) agentlist))
@@ -136,11 +187,11 @@
 
 
 ;;
-;; Improvement through mutation and replication
+;; Genetic recombination (synapsis)
 ;;
 
 (defn- gene-crossover
-  "TODO DocString"
+  "Genetic crossover is the exchange of genes."
   [gene1 gene2 len]
   (let [mask (int (- (Math/pow 2 len) 1))
         last-g1 (bit-and gene1 mask)
@@ -150,10 +201,13 @@
         new-g2 (bit-or
                 (bit-shift-left (bit-shift-right gene2 len) len) last-g1)]
     (list new-g1 new-g2)))
+
 ;(gene-crossover 8 3 6)
 
+
 (defn- crossover
-  "TODO DocString"
+  "Chromosomal crossover is the exchange of genetic material between homologous
+  chromosomes that results in recombinant chromosomes."
   [chromo1 chromo2 bits]
   (let [split-pos (nth (range 1 bits) (rand-int (- bits 1)))
         split-length (- bits split-pos)
@@ -161,32 +215,50 @@
         c1-new (map #(first %1) result)
         c2-new (map #(second %1) result)]
     (list c1-new c2-new)))
+
 ;(crossover '(255 12 18 238 210 199 88) '(4 8 15 16 23 42 108) 8)
 
+
 (defn- mutation
-  "TODO DocString"
-  [chromosome bits percentage]
+  "Mutation can result in several different types of change in sequences.
+  Mutations in genes can either have no effect, alter the product of a gene,
+  or prevent the gene from functioning properly or completely.
+
+  TODO: One study on genetic variations between different species of Drosophila
+  suggests that if a mutation changes a protein produced by a gene, the result
+  is likely to be harmful, with an estimated 70 percent of amino acid
+  polymorphisms having damaging effects, and the remainder being either neutral
+  or weakly beneficial.
+
+  Due to the damaging effects that mutations can have on genes, organisms have
+  mechanisms such as DNA repair to prevent or correct mutations."
+
+  ;; Note: disable non-used percentage param
+  [chromosome bits #_percentage]
   (for [gene chromosome]
     (loop [g gene b 0]
       (if (= b bits)
-	g
-	(let [new-g (if (< (rand) 0.25) (bit-flip g b) g)]
-	  (recur new-g (inc b)))))))
-;;(mutation '(34 21 57 56 11 10) 8)
+        g
+        (let [new-g (if (< (rand) 0.25) (bit-flip g b) g)]
+          (recur new-g (inc b)))))))
+
+;(mutation '(34 21 57 56 11 10) 8)
+
 
 (defn- do-offspring
   "TODO DocString"
   [acc parents-pair]
   (let [percentage 0.3
-        p1c (:chromosome (first parents-pair))
-        p2c (:chromosome (second parents-pair))
+        p1c      (:chromosome (first parents-pair))
+        p2c      (:chromosome (second parents-pair))
         children (crossover p1c p2c 8)
-        child1 {:tag 1 :chromosome
-                (mutation (first children) 8 percentage) :steps (list) :fitness 0}
-        child2 {:tag 1 :chromosome
-                (mutation (second children) 8 percentage) :steps (list)  :fitness 0}
-        old-pop-list (:poplist acc)]
-    (assoc acc :poplist (conj old-pop-list child1 child2))))
+        child1   {:tag 1 :chromosome
+                 (mutation (first children) 8 percentage) :steps (list) :fitness 0}
+        child2   {:tag 1 :chromosome
+                 (mutation (second children) 8 percentage) :steps (list)  :fitness 0}
+        old-pop  (:poplist acc)]
+    (assoc acc :poplist (conj old-pop child1 child2))))
+
 
 (defn- adapted-crossover
   "TODO DocString"
@@ -201,30 +273,33 @@
 	childs (map (fn [s1 s2] (if (= (int (* 2 (rand))) 0) s1 s2)) p1st p2st)]
     (list childc childs)))
 
+
 (defn- adapted-mutation
   "TODO DocString"
   [chromosome steps]
-  (let [dim 22
-	bound 0.5
-	tau (/ 1 (sqrt (* 2 (sqrt dim))))
-	tauprime-rand (* (/ 1 (sqrt (* 2 dim))) (normal 0 1))
-	new-steps-raw (for [s steps]
-		    (* s (expt (Math/E) (+ tauprime-rand (* tau (normal 0 1))))))
-	new-steps (map (fn [s] (if (< s bound) bound s)) new-steps-raw)
-	new-pos (map (fn [c s] (+ c (* s (normal 0 1))))
-		     chromosome new-steps)]
+  (let [dim   22
+        bound 0.5
+        tau   (/ 1 (sqrt (* 2 (sqrt dim))))
+        tauprime-rand (* (/ 1 (sqrt (* 2 dim))) (normal 0 1))
+        new-steps-raw (for [s steps]
+                        (* s (expt (Math/E) (+ tauprime-rand
+                                               (* tau (normal 0 1))))))
+        new-steps (map #(if (< % bound) bound %) new-steps-raw)
+        new-pos   (map #(+ %1 (* %2 (normal 0 1))) chromosome new-steps)]
     (list new-pos new-steps)))
+
 
 (defn- do-offspring-adapted
   "TODO DocString"
   [acc parents-pair]
-  (let [p1 (first parents-pair)
-	p2 (second parents-pair)
-	crossed (adapted-crossover p1 p2)
-	mutated (adapted-mutation (first crossed) (second crossed))
-	child {:tag 1 :chromosome (first mutated)  :steps (second mutated) :fitness 0}
-	old-pop-list (:poplist acc)]
-    (assoc acc :poplist (conj old-pop-list child))))
+  (let [p1      (first parents-pair)
+        p2      (second parents-pair)
+        crossed (adapted-crossover p1 p2)
+        mutated (adapted-mutation (first crossed) (second crossed))
+        child   {:tag 1 :chromosome (first mutated)  :steps (second mutated) :fitness 0}
+        old-pop (:poplist acc)]
+    (assoc acc :poplist (conj old-pop child))))
+
 
 (defn- generate-offspring
   "TODO DocString"
@@ -233,18 +308,23 @@
     (reduce do-offspring-adapted acc parents)
     (reduce do-offspring acc parents)))
 
+
 (defn- survivor-selection
   "TODO DocString"
   [popu ftype percent popsize]
   (let [sorted-all (sort-by :fitness ftype (:poplist popu))
-	size-all (count sorted-all)
-	size-top (* percent size-all)
-	size-rest (- popsize size-top)
-	splitted (split-at size-top sorted-all)
-	top-percent-members (nth splitted 0)
-	rest-offspring (take size-rest (sort-by :fitness ftype
-				  (for [i (nth splitted 1) :when (if (= (:tag i) 1) true)] i)))]
-    (assoc popu :poplist (concat top-percent-members rest-offspring))))
+        size-all   (count sorted-all)
+        size-top   (* percent size-all)
+        size-rest  (- popsize size-top)
+        splitted   (split-at size-top sorted-all)
+        top-percent-members (nth splitted 0)
+        rest-offspring (take size-rest
+                             (sort-by :fitness ftype
+                                      (for [i (nth splitted 1)
+                                            :when (if (= (:tag i) 1) true)] i)))]
+    (assoc popu :poplist
+      (concat top-percent-members rest-offspring))))
+
 
 (defn- parent-selection
   "TODO DocString"
@@ -300,3 +380,38 @@
 
 ;; usage
 ;; (seq (chromo-to-phenotype (:chromosome (ga griewank < 4 30 0.4 0.4 false 50))))
+
+
+;;
+;; Comments
+;;
+
+(comment "
+
+  Problem:
+  -------
+
+  In genetic algorithms, the term of premature convergence means that a
+  population for an optimization problem converged too early, resulting in
+  being suboptimal. In this context, the parental solutions, through the aid of
+  genetic operators, are not able to generate offsprings that are superior to
+  their parents. Premature convergence can happen in case of loss of genetic
+  variation (every individual in the population is identical, see convergence).
+
+  Strategies for preventing premature convergence and to regain genetic
+  variation can be:
+
+  - a mating strategy called incest prevention,
+  - uniform crossover,
+  - favored replacement of similar individuals (preselection or crowding),
+  - segmentation of individuals of similar fitness (fitness sharing),
+  - increasing population size.
+
+  The genetic variation can also be regained by mutation though this process is
+  highly random!!
+
+  Solution:
+  --------
+
+  Fitness sharing
+  ")
