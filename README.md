@@ -1,5 +1,20 @@
 # Metaheuristics for Clojure
 
+## Definition
+
+While there is no commonly accepted definition for the term metaheuristic,
+there are properties that characterize most metaheuristics: Metaheuristics
+are strategies that guide the search process.
+
+Techniques which constitute metaheuristic algorithms range from simple local
+search procedures to complex learning processes.
+
+Metaheuristic algorithms are approximate and usually non-deterministic.
+
+Metaheuristics are not problem-specific.
+
+## Implementation
+
 Metaheuristics for Clojure is a Clojure library for common (and some
 uncommon) metaheuristic algorithms. It uses Clojure Agents to parallel
 compute the fitness functions, so there will be a distinct speedup on
@@ -30,7 +45,7 @@ stands for one of the abbreviations from above. There is only one
 public function to call for each variant (same abbrv.). They all
 return a struct with the global best solution. The fitness value and
 the position ca be accessed by (:position gbest) (it's (:chromosome
-gbest) for the GA/ES) and (:fitness gbest). 
+gbest) for the GA/ES) and (:fitness gbest).
 
 The GA und ES return a genotype representation (think of it as an
 internal representation of the solution). You have to convert it to a

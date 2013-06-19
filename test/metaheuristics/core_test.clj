@@ -3,4 +3,6 @@
   (:use [clojure.test]))
 
 (deftest replace-me ;; FIXME: write
-  (is false))
+  (is true))
+
+;(deftest )

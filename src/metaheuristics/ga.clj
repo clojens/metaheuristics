@@ -21,6 +21,12 @@
         [metaheuristics.testfunctions]))
 
 ;;
+;; Constants
+;;
+
+(def DEBUG? false)
+
+;;
 ;; Helper functions
 ;;
 
@@ -44,13 +50,13 @@
 ;; Structural
 ;;
 
+;; "Natural selection within an individual requires minimal the
+;; properties as outlined here."
 (defstruct individual
-  "Natural selection within an individual requires minimal the
-  properties as outlined here."
   :tag :chromosome :steps :fitness)
 
+;; "A population is made up of individuals."
 (defstruct population
-  "A population is made up of individuals."
   :poplist)
 
 ;;
@@ -63,7 +69,7 @@
   (let [max (int (- (Math/pow 2 bits) 1))]
     (garand-int max n)))
 
-;(doall (generate-chromosome 22 8))
+(doall (generate-chromosome 22 8))
 
 (defn- init-individual
   "Intializes an individiual by giving it identity (hash-map with tag)
@@ -72,13 +78,14 @@
   (struct individual 0 (generate-chromosome n bits)
 	  (map #(* 10 %) (take 22 (repeatedly rand))) 0))
 
-;(init-individual 22 8)
+(init-individual 22 8)
 
 (defn- init-population
   "Initialize a population by populating a list of individuals."
   [n dim bits]
   (let [poplist (map (fn [_] (init-individual dim bits)) (range n))]
     (struct population poplist)))
+
 
 ;;
 ;; Transformation
@@ -214,8 +221,7 @@
   Due to the damaging effects that mutations can have on genes, organisms have
   mechanisms such as DNA repair to prevent or correct mutations."
 
-  ;; Note: disable non-used percentage param
-  [chromosome bits #_percentage]
+  [chromosome bits percentage]
   (for [gene chromosome]
     (loop [g gene b 0]
       (if (= b bits)
@@ -234,16 +240,15 @@
         p2c (:chromosome (second parents-pair))
         children (crossover p1c p2c 8)
         child1 {:tag 1
-                :chromosome (mutation (first children)
-                                      8 percentage)
+                :chromosome (mutation (first children) 8 percentage)
                 :steps (list)
                 :fitness 0}
         child2 {:tag 1
-                :chromosome (mutation (second children)
-                                      8 percentage)
+                :chromosome (mutation (second children) 8 percentage)
                 :steps (list)
                 :fitness 0}
         old-pop (:poplist acc)]
+  ;; Note: disable non-used percentage param
     (assoc acc :poplist (conj old-pop child1 child2))))
 
 
@@ -264,15 +269,22 @@
 (defn- adapted-mutation
   "TODO DocString"
   [chromosome steps]
-  (let [dim 22
-        bound 0.5
+  (let [dim    22
+        bound  0.5
+
         tau (/ 1 (sqrt (* 2 (sqrt dim))))
+
         tauprime-rand (* (/ 1 (sqrt (* 2 dim))) (normal 0 1))
+  ;; Note: disable non-used percentage param
+
         new-steps-raw (for [s steps]
                         (* s (expt (Math/E)
-                                   (+ tauprime-rand (* tau (normal 0 1))))))
+                                   (+ tauprime-rand
+                                      (* tau (normal 0 1))))))
+
         new-steps (map #(if (< % bound) bound %) new-steps-raw)
-        new-pos (map #(+ %1 (* %2 (normal 0 1))) chromosome new-steps)]
+        new-pos   (map #(+ %1 (* %2 (normal 0 1))) chromosome new-steps)]
+
     (list new-pos new-steps)))
 
 
@@ -303,10 +315,10 @@
   "TODO DocString"
   [popu ftype percent popsize]
   (let [sorted-all (sort-by :fitness ftype (:poplist popu))
-        size-all (count sorted-all)
-        size-top (* percent size-all)
-        size-rest (- popsize size-top)
-        splitted (split-at size-top sorted-all)
+        size-all   (count sorted-all)
+        size-top   (* percent size-all)
+        size-rest  (- popsize size-top)
+        splitted   (split-at size-top sorted-all)
         top-percent-members (nth splitted 0)
         rest-offspring (take size-rest
                              (sort-by
@@ -320,17 +332,19 @@
 (defn- parent-selection
   "TODO DocString"
   [popu ftype percent popsize adapted?]
-  (let [sorted (sort-by :fitness ftype (:poplist popu))
-	size-parents (int (* percent popsize))
-	parents (take size-parents sorted)
+  (let [sorted       (sort-by :fitness ftype (:poplist popu))
+        size-parents (int (* percent popsize))
+        parents      (take size-parents sorted)
+        ext-parents  (if adapted?
+                       (scramble (take (* 2 popsize) (cycle parents)))
+                       (scramble (take popsize (cycle parents))))
+        splitted     (if adapted?
+                       (split-at popsize ext-parents)
+                       (split-at (/ popsize 2) ext-parents))]
+    (map #(list %1 %2)
+         (nth splitted 0)
+         (nth splitted 1))))
 
-	ext-parents (if adapted?
-		     (scramble (take (* 2 popsize) (cycle parents)))
-		     (scramble (take popsize (cycle parents))))
-	splitted (if adapted?
-		   (split-at popsize ext-parents)
-		   (split-at (/ popsize 2) ext-parents))]
-    (map #(list %1 %2) (nth splitted 0) (nth splitted 1))))
 
 (defn ga
   "Starts the GA algorithm.
@@ -368,11 +382,10 @@
               (println "no. survivors: " (count (:poplist popu-surv)))))
           (recur (dec runs) new-pop))))))
 
-(def DEBUG? false)
 
 ;; usage
-;;(seq (chromo-to-phenotype (:chromosome
-;;                           (ga griewank < 4 30 0.4 0.4 false 50))))
+(seq (chromo-to-phenotype (:chromosome
+                           (ga griewank < 4 30 0.4 0.4 false 50))))
 
 
 ;;
