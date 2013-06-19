@@ -18,16 +18,11 @@
 
   However, metaheuristics such as PSO do not guarantee an optimal solution is
   ever found."
-  (:use [clojure.contrib.math])
-  (:use metaheuristics.testfunctions))
+  (:require metaheuristics :refer [shuffle normal])
+  (:use [clojure.contrib.math]
+        [metaheuristics.testfunctions]))
 
-(defn- scramble
-  "TODO DocString"
-  [l]
-  (let [items (java.util.ArrayList. l)]
-    scramble (do
-               (java.util.Collections/shuffle items)
-               (seq items))))
+
 
 ;;
 ;; Structural
@@ -55,7 +50,8 @@
         (map (fn [_] (init-particle nDimensions max)) (range nParticles))
         best (init-particle nDimensions max)
         vmax (agent (double-array (repeat nDimensions (* vmaxDelta max))))
-        hfit (agent (double-array (replicate nHistoryFitness Double/MAX_VALUE)))]
+        hfit (agent (double-array
+                     (replicate nHistoryFitness Double/MAX_VALUE)))]
     (struct swarm particles best vmax hfit)))
 
 (defn- inertia-weight

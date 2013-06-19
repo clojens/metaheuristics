@@ -4,15 +4,10 @@
   Local search algorithms move from solution to solution in the space of
   candidate solutions (the search space) by applying local changes, until a
   solution deemed optimal is found or a time bound is elapsed."
-  (:use [clojure.set :only (intersection difference)])
-  (:use [clojure.contrib.math])
-  (:use metaheuristics.testfunctions))
+  (:use [clojure.set :only (intersection difference)]
+        [clojure.contrib.math]
+        [metaheuristics.testfunctions]))
 
-(defn- normal
-  "Random from normal distribution."
-  [mu sigma]
-  (let [r (new java.util.Random)]
-    (+ mu (* sigma (.nextGaussian r)))))
 
 
 ;; Invasive weed optimization

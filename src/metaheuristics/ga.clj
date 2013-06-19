@@ -15,36 +15,17 @@
 
   Fitness (often denoted in population genetics models) is a central
   idea in evolutionary theory. "
-
-  (:use [clojure.set :only (intersection difference)])
-  (:use [clojure.contrib.math])
-  (:use metaheuristics.testfunctions))
+  (:require [metaheuristics.core :refer [normal scramble]])
+  (:use [clojure.set :only (intersection difference)]
+        [clojure.contrib.math]
+        [metaheuristics.testfunctions]))
 
 ;;
 ;; Helper functions
 ;;
 
-(defn- scramble
-  "The Fisher–Yates shuffle (named after Ronald Fisher and Frank Yates),
-  also known as the Knuth shuffle (after Donald Knuth), is an algorithm
-  for generating a random permutation of a finite set—in plain terms,
-  for randomly shuffling the set."
-  [l]
-  (let [items (java.util.ArrayList. l)]
-    scramble (do
-               (java.util.Collections/shuffle items)
-               (seq items))))
-
-(defn- normal
-  "Gaussian functions are widely used in statistics where they describe the
-  normal distributions and in signal processing where they serve to define
-  Gaussian filters."
-  [mu sigma]
-  (let [r (new java.util.Random)]
-    (+ mu (* sigma (.nextGaussian r)))))
-
 (defn- garand-int
-  "Generates a list of n random integers with a max possible value roof."
+  "Generates a list of n random integers below with a maximum."
   [max n]
   (map (fn [_] (int (* max (rand)))) (range n)))
 
@@ -249,14 +230,20 @@
   "TODO DocString"
   [acc parents-pair]
   (let [percentage 0.3
-        p1c      (:chromosome (first parents-pair))
-        p2c      (:chromosome (second parents-pair))
+        p1c (:chromosome (first parents-pair))
+        p2c (:chromosome (second parents-pair))
         children (crossover p1c p2c 8)
-        child1   {:tag 1 :chromosome
-                 (mutation (first children) 8 percentage) :steps (list) :fitness 0}
-        child2   {:tag 1 :chromosome
-                 (mutation (second children) 8 percentage) :steps (list)  :fitness 0}
-        old-pop  (:poplist acc)]
+        child1 {:tag 1
+                :chromosome (mutation (first children)
+                                      8 percentage)
+                :steps (list)
+                :fitness 0}
+        child2 {:tag 1
+                :chromosome (mutation (second children)
+                                      8 percentage)
+                :steps (list)
+                :fitness 0}
+        old-pop (:poplist acc)]
     (assoc acc :poplist (conj old-pop child1 child2))))
 
 
@@ -264,39 +251,42 @@
   "TODO DocString"
   [p1 p2]
   (let [dim (count (:chromosome p1))
-	dim2 (/ dim 2)
-	p1ch (:chromosome p1)
-	p1st (:steps p1)
-	p2ch (:chromosome p2)
-	p2st (:steps p2)
-	childc (map (fn [c1 c2] (if (= (int (* 2 (rand))) 0) c1 c2)) p1ch p2ch)
-	childs (map (fn [s1 s2] (if (= (int (* 2 (rand))) 0) s1 s2)) p1st p2st)]
+        dim2 (/ dim 2)
+        p1ch (:chromosome p1)
+        p1st (:steps p1)
+        p2ch (:chromosome p2)
+        p2st (:steps p2)
+        childc (map #(if (= (int (* 2 (rand))) 0) %1 %2) p1ch p2ch)
+        childs (map #(if (= (int (* 2 (rand))) 0) %1 %2) p1st p2st)]
     (list childc childs)))
 
 
 (defn- adapted-mutation
   "TODO DocString"
   [chromosome steps]
-  (let [dim   22
+  (let [dim 22
         bound 0.5
-        tau   (/ 1 (sqrt (* 2 (sqrt dim))))
+        tau (/ 1 (sqrt (* 2 (sqrt dim))))
         tauprime-rand (* (/ 1 (sqrt (* 2 dim))) (normal 0 1))
         new-steps-raw (for [s steps]
-                        (* s (expt (Math/E) (+ tauprime-rand
-                                               (* tau (normal 0 1))))))
+                        (* s (expt (Math/E)
+                                   (+ tauprime-rand (* tau (normal 0 1))))))
         new-steps (map #(if (< % bound) bound %) new-steps-raw)
-        new-pos   (map #(+ %1 (* %2 (normal 0 1))) chromosome new-steps)]
+        new-pos (map #(+ %1 (* %2 (normal 0 1))) chromosome new-steps)]
     (list new-pos new-steps)))
 
 
 (defn- do-offspring-adapted
   "TODO DocString"
   [acc parents-pair]
-  (let [p1      (first parents-pair)
-        p2      (second parents-pair)
+  (let [p1 (first parents-pair)
+        p2 (second parents-pair)
         crossed (adapted-crossover p1 p2)
         mutated (adapted-mutation (first crossed) (second crossed))
-        child   {:tag 1 :chromosome (first mutated)  :steps (second mutated) :fitness 0}
+        child {:tag 1
+               :chromosome (first mutated)
+               :steps (second mutated)
+               :fitness 0}
         old-pop (:poplist acc)]
     (assoc acc :poplist (conj old-pop child))))
 
@@ -313,15 +303,16 @@
   "TODO DocString"
   [popu ftype percent popsize]
   (let [sorted-all (sort-by :fitness ftype (:poplist popu))
-        size-all   (count sorted-all)
-        size-top   (* percent size-all)
-        size-rest  (- popsize size-top)
-        splitted   (split-at size-top sorted-all)
+        size-all (count sorted-all)
+        size-top (* percent size-all)
+        size-rest (- popsize size-top)
+        splitted (split-at size-top sorted-all)
         top-percent-members (nth splitted 0)
         rest-offspring (take size-rest
-                             (sort-by :fitness ftype
-                                      (for [i (nth splitted 1)
-                                            :when (if (= (:tag i) 1) true)] i)))]
+                             (sort-by
+                              :fitness ftype
+                              (for [i (nth splitted 1)
+                                    :when (if (= (:tag i) 1) true)] i)))]
     (assoc popu :poplist
       (concat top-percent-members rest-offspring))))
 
@@ -372,14 +363,16 @@
                         (for [i (:poplist popu-surv)] (assoc i :tag 0)))]
           (if DEBUG?
             (do (println "no. parent pairs:" (count parents))
-              (println "no. parents + children:" (count (:poplist popu-with-children)))
+              (println "no. parents + children:"
+                       (count (:poplist popu-with-children)))
               (println "no. survivors: " (count (:poplist popu-surv)))))
           (recur (dec runs) new-pop))))))
 
 (def DEBUG? false)
 
 ;; usage
-;; (seq (chromo-to-phenotype (:chromosome (ga griewank < 4 30 0.4 0.4 false 50))))
+;;(seq (chromo-to-phenotype (:chromosome
+;;                           (ga griewank < 4 30 0.4 0.4 false 50))))
 
 
 ;;

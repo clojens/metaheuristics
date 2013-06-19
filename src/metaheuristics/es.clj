@@ -2,30 +2,40 @@
   "Evolution strategy (ES) is an optimization technique based on ideas of
   adaptation and evolution. It belongs to the general class of evolutionary
   computation or artificial evolution methodologies."
-  (:use [clojure.set :only (intersection difference)])
-  (:use [clojure.contrib.math])
-  (:use metaheuristics.testfunctions))
-
-; helper functions
-; ----------------
-(defn- scramble
-  [l]
-  (let [items (java.util.ArrayList. l)]
-	scramble (do (java.util.Collections/shuffle items) (seq items))))
-
-;; rand from normal distribution
-(defn- normal [mu sigma]
-  (let [r (new java.util.Random)]
-    (+ mu (* sigma (.nextGaussian r)))))
-(defn- esrand-int [max number]
-  (map (fn [_] (* max (rand))) (range number)))
+  (:require [metaheuristics.core :refer [normal scramble]])
+  (:use [clojure.set :only (intersection difference)]
+        [clojure.contrib.math]
+        [metaheuristics.testfunctions]))
 
 
-;; genetic algorithm
-;; -----------------
+;;
+;; Helper functions
+;;
+
+(defn- esrand-int
+  "Generates a list of n random integers below with a maximum."
+  [max n]
+  (map (fn [_] (* max (rand))) (range n)))
+
+
+;;
+;; Genetic algorithm
+;;
+
 ;; FIXME Replace optionally with defrecord(2)
-(defstruct individual :tag :chromosome :steps :fitness)
-(defstruct population :poplist)
+
+(defrecord individual2
+  :tag :chromosome :steps :fitness)
+
+(defstruct individual
+  "Natural selection within an individual requires minimal the
+  properties as outlined here."
+  :tag :chromosome :steps :fitness)
+
+(defstruct population
+  "Natural selection within an individual requires minimal the
+  properties as outlined here."
+  :poplist)
 
 (defn- generate-chromosome
   "TODO DocString"
@@ -131,11 +141,16 @@
         tauprime-rand (* (/ 1 (sqrt (* 2 dim))) (normal 0 1))
         new-steps-raw (amap steps i ret
                             (* (aget steps i)
-                               (expt (Math/E) (+ tauprime-rand (* tau (normal 0 1))))))
+                               (expt (Math/E)
+                                     (+ tauprime-rand
+                                        (* tau (normal 0 1))))))
         new-steps (amap new-steps-raw i ret
-                        (if (< (aget new-steps-raw i) bound) bound (aget new-steps-raw i)))
+                        (if (< (aget new-steps-raw i) bound)
+                          bound (aget new-steps-raw i)))
         new-pos (amap chromosome i ret
-		    (+ (aget chromosome i) (* (aget new-steps i) (normal 0 1))))]
+                      (+ (aget chromosome i)
+                         (* (aget new-steps i)
+                            (normal 0 1))))]
     (list new-pos new-steps)))
 ;; (def chromo (generate-chromosome 22 8))
 ;; (seq (second (adapted-mutation chromo (double-array (repeat 22 1.0)))))
@@ -145,7 +160,10 @@
   [acc parents-pair]
   (let [cross (crossover-inter (first parents-pair) (second parents-pair))
         mutated (adapted-mutation (first cross) (second cross))
-        child {:tag 1 :chromosome (first mutated) :steps (second mutated) :fitness 0}
+        child {:tag 1
+               :chromosome (first mutated)
+               :steps (second mutated)
+               :fitness 0}
         old-pop-list (:poplist acc)]
     (assoc acc :poplist (conj old-pop-list child))))
 
@@ -171,18 +189,19 @@
         splitted (split-at (* (/ factor 2) popsize) parents)]
     (map #(list %1 %2) (nth splitted 0) (nth splitted 1))))
 
-;(def foo (init-population 10 22 8))
-;(count (parent-selection foo 0.4 10))
+;;(def foo (init-population 10 22 8))
+;;(count (parent-selection foo 0.4 10))
 
 (defn es
   "Starts the ES algorithm.
   Parameter:
-  fitness - defines the fitness function used.
+  fitness        - defines the fitness function used.
   The only argument is the position of the particle (a double-vector).
-  ftype - defines the type of optimization problem (minimize (<) or maximize (>)).
-  dim - number of dimensions in solution.
-  popsize - size of the population.
-  offsp-factor - factor for the number of offspring created (usually 2).
+  ftype          - defines the type of optimization problem
+                   (minimize (<) or maximize (>)).
+  dim            - number of dimensions in solution.
+  popsize        - size of the population.
+  offsp-factor   - factor for the number of offspring created (usually 2).
   max-iterations - maximum number of iterations.
   "
   [fitness ftype dim popsize offsp-factor max-iterations]
@@ -209,5 +228,4 @@
 	  (recur (dec runs) new-pop))))))
 
 (def DEBUG? false)
-
 ;; (seq (chromo-to-phenotype (:chromosome (es griewank < 10 30 2 100))))
