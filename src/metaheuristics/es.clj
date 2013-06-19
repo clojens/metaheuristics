@@ -1,4 +1,7 @@
 (ns metaheuristics.es
+  "Evolution strategy (ES) is an optimization technique based on ideas of
+  adaptation and evolution. It belongs to the general class of evolutionary
+  computation or artificial evolution methodologies."
   (:use [clojure.set :only (intersection difference)])
   (:use [clojure.contrib.math])
   (:use metaheuristics.testfunctions))
@@ -17,18 +20,22 @@
 (defn- esrand-int [max number]
   (map (fn [_] (* max (rand))) (range number)))
 
-; genetic algorithm
-; -----------------
+
+;; genetic algorithm
+;; -----------------
+;; FIXME Replace optionally with defrecord(2)
 (defstruct individual :tag :chromosome :steps :fitness)
 (defstruct population :poplist)
 
 (defn- generate-chromosome
+  "TODO DocString"
   [n bits]
   (let [max (int (- (Math/pow 2 bits) 1))]
     (double-array (esrand-int max n))))
 ;(generate-chromosome 22 8)
 
 (defn- init-individual
+  "TODO DocString"
   [n bits]
   (struct individual 0 (generate-chromosome n bits)
 	  (double-array (map #(* 10 %) (take 22 (repeatedly rand))))
@@ -36,11 +43,13 @@
 ;(init-individual 22 8)
 
 (defn- init-population
+  "TODO DocString"
   [n dim bits]
   (let [poplist (map (fn [_] (init-individual dim bits)) (range n))]
     (struct population poplist)))
 
 (defn chromo-to-phenotype
+  "TODO DocString"
   [chromosome]
   (let [sum (areduce chromosome i ret 0
 		     (+ ret (aget chromosome i)))]

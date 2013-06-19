@@ -1,15 +1,43 @@
 (ns metaheuristics.pso
+  "Particle swarm optimization (PSO) is a computational method that optimizes a
+  problem by iteratively trying to improve a candidate solution with regard to
+  a given measure of quality.
+
+  PSO optimizes a problem by having a population of candidate solutions, here
+  dubbed particles, and moving these particles around in the search-space
+  according to simple mathematical formulae over the particle's position and
+  velocity.
+
+  Each particle's movement is influenced by its local best known position and is
+  also guided toward the best known positions in the search-space, which are
+  updated as better positions are found by other particles. This is expected to
+  move the swarm toward the best solutions.
+
+  PSO is a metaheuristic as it makes few or no assumptions about the problem
+  being optimized and can search very large spaces of candidate solutions.
+
+  However, metaheuristics such as PSO do not guarantee an optimal solution is
+  ever found."
   (:use [clojure.contrib.math])
   (:use metaheuristics.testfunctions))
 
 (defn- scramble
+  "TODO DocString"
   [l]
   (let [items (java.util.ArrayList. l)]
-	scramble (do (java.util.Collections/shuffle items) (seq items))))
+    scramble (do
+               (java.util.Collections/shuffle items)
+               (seq items))))
 
-; swarm
-(defstruct particle :position :velocity :pbestpos :pbestfit)
-(defstruct swarm :particlelist :gbest :vmax :hfit)
+;;
+;; Structural
+;;
+
+(defstruct particle
+  :position :velocity :pbestpos :pbestfit)
+
+(defstruct swarm
+  :particlelist :gbest :vmax :hfit)
 
 (defn- init-particle
   "TODO DocString"

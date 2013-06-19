@@ -1,4 +1,9 @@
 (ns metaheuristics.iwo
+  "Local search can be used on problems that can be formulated as finding a
+  solution maximizing a criterion among a number of candidate solutions.
+  Local search algorithms move from solution to solution in the space of
+  candidate solutions (the search space) by applying local changes, until a
+  solution deemed optimal is found or a time bound is elapsed."
   (:use [clojure.set :only (intersection difference)])
   (:use [clojure.contrib.math])
   (:use metaheuristics.testfunctions))
@@ -194,7 +199,7 @@
     (apply await (:plantlist @population))
     (send population set-bestworst ftype)
     (await population)
-    ; start IWO
+    ;; start IWO
     (dorun
      (map
       #(grow fitness ftype population max-iterations nplants-max modulation %)

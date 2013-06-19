@@ -1,4 +1,8 @@
 (ns metaheuristics.ga
+  "A genetic algorithm (GA) is a search heuristic that mimics the process of
+  natural evolution. This heuristic (also sometimes called a metaheuristic)
+  is routinely used to generate useful solutions to optimization and search
+  problems."
   (:use [clojure.set :only (intersection difference)])
   (:use [clojure.contrib.math])
   (:use metaheuristics.testfunctions))
@@ -28,10 +32,15 @@
   (Math/sqrt (areduce v1 i ret 0
 	   (+ ret (Math/pow (- (aget v1 i) (aget v2 i)) 2)))))
 
-; genetic algorithm
-; -----------------
+;;
+;; Structural
+;;
 (defstruct individual :tag :chromosome :steps :fitness)
 (defstruct population :poplist)
+
+;;
+;; Generation / initialization
+;;
 
 (defn- generate-chromosome
   "TODO DocString"
@@ -52,11 +61,20 @@
   (let [poplist (map (fn [_] (init-individual dim bits)) (range n))]
     (struct population poplist)))
 
+;;
+;; Transformation
+;;
+
 (defn chromo-to-phenotype
   "TODO DocString"
   [chromosome]
   (let [sum (reduce + chromosome)]
     (double-array (for [gene chromosome] (/ gene sum)))))
+
+
+;;
+;; Strategies
+;;
 
 (defn- share
   "TODO DocString"
@@ -79,6 +97,10 @@
     (assoc ind :fitness (/ (:fitness ind) dist-sum))))
 ;; (def foo (init-population 10 22 8))
 ;; (fitness-sharing (init-individual 22 8) foo)
+
+;;
+;; Evaluate process
+;;
 
 (defn- evaluate-individual
   "TODO DocString"
@@ -111,6 +133,11 @@
     (dorun (map #(send %1 evaluate-individual fitness) agentlist))
     (apply await agentlist)
     (assoc popu :poplist (for [agent agentlist] @agent))))
+
+
+;;
+;; Improvement through mutation and replication
+;;
 
 (defn- gene-crossover
   "TODO DocString"
@@ -189,6 +216,7 @@
     (list new-pos new-steps)))
 
 (defn- do-offspring-adapted
+  "TODO DocString"
   [acc parents-pair]
   (let [p1 (first parents-pair)
 	p2 (second parents-pair)
@@ -199,6 +227,7 @@
     (assoc acc :poplist (conj old-pop-list child))))
 
 (defn- generate-offspring
+  "TODO DocString"
   [acc parents adapted?]
   (if adapted?
     (reduce do-offspring-adapted acc parents)
@@ -248,23 +277,24 @@
   "
   [fitness ftype dim popsize par-perc surv-perc adapted? max-iterations]
   (let [popu (init-population popsize 22 8)
-	popu-evaluated (evaluate-all-firstrun popu fitness)]
-
+        popu-evaluated (evaluate-all-firstrun popu fitness)]
     (loop [runs max-iterations popu popu-evaluated]
-      (if DEBUG? (println "best:" (:fitness (first (sort-by :fitness ftype
-							    (:poplist popu))))))
+      (if DEBUG?
+        (println "best:"
+                 (:fitness (first (sort-by :fitness ftype (:poplist popu))))))
       (if (zero? runs)
-	(first (sort-by :fitness ftype (:poplist popu)))
-	(let [parents (parent-selection popu ftype par-perc popsize adapted?)
-	      popu-with-children (generate-offspring popu parents adapted?)
-	      popu-eva (evaluate-all popu-with-children fitness adapted?)
-	      popu-surv (survivor-selection popu-eva ftype surv-perc popsize)
-	      new-pop (assoc popu-surv :poplist
-			     (for [i (:poplist popu-surv)] (assoc i :tag 0)))]
-	  (if DEBUG? (do (println "no. parent pairs:" (count parents))
-			 (println "no. parents + children:" (count (:poplist popu-with-children)))
-			 (println "no. survivors: " (count (:poplist popu-surv)))))
-	  (recur (dec runs) new-pop))))))
+        (first (sort-by :fitness ftype (:poplist popu)))
+        (let [parents (parent-selection popu ftype par-perc popsize adapted?)
+              popu-with-children (generate-offspring popu parents adapted?)
+              popu-eva (evaluate-all popu-with-children fitness adapted?)
+              popu-surv (survivor-selection popu-eva ftype surv-perc popsize)
+              new-pop (assoc popu-surv :poplist
+                        (for [i (:poplist popu-surv)] (assoc i :tag 0)))]
+          (if DEBUG?
+            (do (println "no. parent pairs:" (count parents))
+              (println "no. parents + children:" (count (:poplist popu-with-children)))
+              (println "no. survivors: " (count (:poplist popu-surv)))))
+          (recur (dec runs) new-pop))))))
 
 (def DEBUG? false)
 
